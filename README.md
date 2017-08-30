@@ -33,13 +33,13 @@ In other words,
 used https://www.codecogs.com/latex/eqneditor.php
 --->
 
-where _a<sub>j</sub>_ is randomly drawn from a complex Gaussian,
-and **n**<sub>_j_</sub> is uniformly randomly drawn from the unit circle
-or sphere.
-
-Its autocorrelation function is the _J_<sub>0</sub>(_r_) Bessel function in 2D
+where for each _j_, _a<sub>j</sub>_ is iid random from a complex Gaussian
+(ie real and imaginary parts are iid Gaussian with zero mean and unit variance),
+and **n**<sub>_j_</sub> is iid uniformly randomly drawn from the unit circle
+or sphere with the usual Haar measure.
+In terms of distance _r_, the autocorrelation function of _u_
+is the _J_<sub>0</sub>(_r_) Bessel function in 2D,
 or the spherical Bessel _j_<sub>0</sub>(_r_) = sin(_r_)/_r_ in 3D.
-
 For some pictures in 2D see https://math.dartmouth.edu/~ahb/rpws/
 
 - alpha=0: "Fubini-Study ensemble". _u_ is the real part of the
@@ -53,6 +53,8 @@ than for alpha=1, although it is still oscillatory.
 
 
 ## Basic usage
+
+From either MATLAB or octave:
 
 - `[u x] = rpw2dnufft(M, ppw, alpha);` outputs a 2D `M`-by-`M` grid of function values
 `u` at the coordinates given by `x` along both axes, with `ppw` grid points per wavelength. `alpha` is 0 or 1 as described above.

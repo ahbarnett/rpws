@@ -1,11 +1,11 @@
-function [u x] = rpw2dnufft(M, ppw, alpha, eps, task, nopts)
-% RPW2DNUFFT - evaluate real 2D random plane wave for alpha=1 or 0, via NUFFT
+function [u x] = rpw3dnufft(M, ppw, alpha, eps, task, nopts)
+% RPW3DNUFFT - evaluate real 3D random plane wave for alpha=1 or 0, via NUFFT
 %
-% [u x] = rpw2dnufft(M, ppw, alpha)
+% [u x] = rpw3dnufft(M, ppw, alpha)
 % where alpha=1 (monochromatic) or alpha=0 (Fubini-Study ensemble),
-% returns a 2d M-by-M grid of real values u, sampled on the grid x in
-% each coordinate, from the unit-wavenumber random plane wave ensemble.
-% ppw controls the number of points per wavelength; the box size is thus
+% returns a 3d M-by-M-by-M grid of real values u, sampled on the grid x on
+% each of the three axes, from the unit-wavenumber random plane wave ensemble.
+% ppw controls the number of points per wavelength; the cube is thus
 % M/ppw wavelengths on a side. The output field u has unit variance.
 %
 % The FINUFFT library is used, which is multi-core, calls FFTW, and is usually
@@ -13,17 +13,17 @@ function [u x] = rpw2dnufft(M, ppw, alpha, eps, task, nopts)
 % with any routine based on the FFT, if possible the box size M should be
 % chosen to have small prime factors (eg a power of 2) for efficiency.
 %
-% [u x] = rpw2dnufft(M, ppw, alpha, eps) also controls overall accuracy
+% [u x] = rpw3dnufft(M, ppw, alpha, eps) also controls overall accuracy
 % (default eps = 1e-6, also used if eps = [])
 %
-% [u x] = rpw2dnufft(M, ppw, alpha, eps, task) allows testing:
-%  task = 'b' generates error plot for Fourier-Bessel (local expansion)
-%             with high order (alpha=1 case), or 0-order aperture func (alpha=1)
+% [u x] = rpw3dnufft(M, ppw, alpha, eps, task) allows testing:
+%  task = 'b' generates error plot for spherical-harmonic (local expansion)
+%             m=n=0 basis function (alpha=1 case), or j_1(r)/r (alpha=0).
 %             Note: slow since has to evaluate Bessel; keep M smaller here.
-%  task = '1' generates one horiz-traveling plane wave
+%  task = '1' generates one z-traveling plane wave
 %  task = 'p' (default) generates RPW as above.
 %
-% [u x] = rpw2dnufft(M, ppw, alpha, eps, task, nopts) passes nopts to nufft
+% [u x] = rpw3dnufft(M, ppw, alpha, eps, task, nopts) passes nopts to nufft
 %  library. Eg: nopts.fftw = 0 (ESTIMATE), 1 (MEASURE) controls FFTW's plan
 %  (which is saved within a MATLAB session).
 %  nopts.debug=1 shows FINUFFT internal info.
@@ -32,30 +32,21 @@ function [u x] = rpw2dnufft(M, ppw, alpha, eps, task, nopts)
 %
 % Examples: (with timings on 2017 i7-7700HQ laptop)
 %
-% [u x] = rpw2dnufft(4096, 16, 1);       % uses 1.5 GB
-% figure; imagesc(x,x,u); axis xy equal tight;
+% 20 wavelengths cube @ 16 ppw:
+% M = 320; [u x] = rpw3dnufft(M, 16, 1);       % takes 6 sec, uses around 5 GB
 %
-% FFTW timing is strange: this takes 2.5 s, using default FFTW ESTIMATE,
-% which is no faster than the single-core CMCL NUFFT library. However,
+% animate slices through it:
+% figure; for z=1:M, imagesc(x,x,squeeze(u(:,:,z))); caxis([-2 2]); axis equal; title(sprintf('z=%.3g',x(z))); drawnow; end
 %
-% [u x] = rpw2dnufft(4100, 16, 1);       % takes only 1.5 s.
+% 50 wavelengths cube @ 10 ppw, showing FINUFFT info:
+% M=500; o.debug=1; [u x] = rpw3dnufft(M, 10, 1,[],[],o);   % 11 s, around 20 GB
+% M=500; o.debug=1; [u x] = rpw3dnufft(M, 10, 0,[],[],o);   % 14 s, around 20 GB
 %
-% Better is to use MEASURE to choose the fastest FFTW plan:
-% nopts.fftw=1; [u x] = rpw2dnufft(4096, 16, 1, [], [], nopts);
-% takes 35 sec when first run, due to FFTW_MEASURE, then repeats are only 0.5 s,
-% around 4x faster than CMCL, even with 1 thread. Thus, if you intend to
-% generate many samples, first use (the expensive) FFTW_MEASURE.
+% Note that here alpha=0, despite needing 1e7 quadr pts, takes only 3 s more.
 %
-% [u x] = rpw2dnufft(4096, 16, 0);       % takes 0.8 s (after FFTW_MEASURE)
-%
-% 1000-wavelengths size box @ 16 points per wavelength: (uses ~17 GB)
-% [u x] = rpw2dnufft(16348, 16, 1);
-% uses FFTW_ESTIMATE and takes 85 sec, but
-% nopts.fftw=1; [u x] = rpw2dnufft(16348, 16, 1,[],[],nopts);
-% takes 220 s for FFTW_MEASURE, then repeat calls are only 19 s.
-%
-% At least on my machine, *avoiding* powers of 2 is better (weirdly) if you
-% use the default FFTW_ESTIMATE.
+% Strangely, using FFTW_ESTIMATE (as default above) is *slower* for powers of
+% two, against the usual wisdom. Thus, unless you use FFTW_MEASURE, avoid
+% powers of two. See also examples in rpw2dnufft.m
 %
 % Dependencies:
 %
@@ -67,11 +58,10 @@ function [u x] = rpw2dnufft(M, ppw, alpha, eps, task, nopts)
 % installed and built, and its top directory in the matlab path.
 %
 % Notes:
-% 8/30/17, added alpha=1 'b' case.    (c) Alex Barnett 2006-2017.
-% Supercedes rpw2dsample.m from 2009, using much less RAM, and including
-% case alpha=0. Supercedes rpw2dnufft.m of 8/16/14 which used CMCL NUFFT.
+% 8/30/17, added alpha=1 'b' case.  (c) Alex Barnett 2006-2017.
+% Supercedes rpw3dnufft.m of 8/16/14 which used CMCL NUFFT.
 % For work w/ collaborators Sarnak, Canzani, Jin, Konrad, Decourcy-Ireland.
-% Includes routines by Andras Pataki.
+% Includes routines by Andras Pataki, Greg von Winckel.
 
 if nargin<4 | isempty(eps), eps=1e-6; end  % nufft tolerance; gives 8-9 digits
 if nargin<5 | isempty(task), task='p'; end
@@ -79,55 +69,80 @@ if nargin<6, nopts=[]; end
 if alpha~=1 & alpha~=0, error('alpha must be 0 or 1'); end % monochromatic
 
 fprintf('box is %.3g wavelengths on a side\n',M/ppw)
-fprintf('predicted RAM usage is %.3g GB\n',9e-8*M^2)
-h = 2*pi/ppw;    % coord grid spacing = radius in k-space = Kyle's alpha
+fprintf('predicted RAM usage is %.2g GB\n',1.6e-7*M^3)
+h = 2*pi/ppw; % coord grid spacing = radius in k-space = Kyle's alpha
 
 if task=='1'  % one horiz-traveling plane wave
   N = 1;
-  xj = h; yj = 0; % wavevector (h,0)
+  xj = 0; yj = 0; zj = h; % wavevector (0,0,h)
   fj = 1;
-elseif task=='b'    % high-order J_n bessel test (uex slow for large n)
-  if alpha==1
-    n = ceil(0.9*h*M/sqrt(2));   % order n to test
-    fprintf('testing bessel order n=%d\n',n);
-    % (need to check out to p = h*M/sqrt(2), eg 580 for ppw=16, M=2048)
-    N = ceil(2.0*h*M);  % for high-n bessel, needs to go up to around predicted
-    tj = 2*pi*(1:N)/N;  % must be full circle
-    xj = h*cos(tj); yj = h*sin(tj);
-    fj = (1/N)*(-1i)^n*exp(1i*n*tj);   % normalized
-  else                   % only case n=0 for now
-    Nt = ceil(2.0*h*M);  % N per ring (full circle)
-    hxi = 2*pi/(2.0*M*h);   % grid spacing in \xi from 0 to 1 in radius
-    [r w] = QuadNodesInterval(0,1,0,hxi,1,1,16); % smooth alpert-corr rule
-    Nr = numel(r); N = Nt*Nr;   % # radial pts, total # pts
-    tj = 2*pi*(1:Nt)/Nt;          % equispaced angles on full circle
-    xj = zeros(1,N); yj = xj; fj = xj;
-    for i=1:Nr   % loop radially over quadr nodes, with weight 2r
-      v = 2*r(i)*w(i);   % quadr wei is applied to variance
-      jj = (i-1)*Nt + (1:Nt); % indices
-      xj(jj) = h*r(i)*cos(tj); yj(jj) = h*r(i)*sin(tj);
-      fj(jj) = 0.5*v/Nt;      % prefactor by trial & error
+  
+elseif task=='b'
+  if alpha==1      % spherical j_0(r) bessel func is FT of const func on S^2
+    Np = ceil(1.0*h*M);   % # uniform sample pts in 0<=phi<pi
+    pj = pi*(1:Np)/Np;    % half circle
+    Nz = ceil(1.0*h*M);   % # sample pts in -1<z<1
+    [z w] = lgwt(Nz,-1,1);  % vertical quadr scheme
+    N = Np*Nz; xj = zeros(1,N); yj = xj; zj = xj; fj = xj; % alloc arrays
+    for j=1:Nz
+      jj = (j-1)*Np + (1:Np); % indices
+      rho = sqrt(1-z(j)^2);   % circle radius in xy plane
+      xj(jj) = h*rho*cos(pj); yj(jj) = h*rho*sin(pj); zj(jj) = h*z(j);
+      fj(jj) = (0.5/Np)*w(j);   % norm factor 0.5 found empirically
     end
-
+  else      % spherical j_1(r)/r bessel func is FT of char func of unit ball
+    Np = ceil(1.0*h*M);   % # uniform sample pts in 0<=phi<pi
+    pj = pi*(1:Np)/Np;    % half circle
+    Nz = ceil(1.0*h*M);   % # sample pts in -1<z<1
+    [z w] = lgwt(Nz,-1,1);  % vertical quadr scheme
+    hxi = 2*pi/(2.0*M*h);   % grid spacing in \xi if from 0 to 1 in radius
+    [r wr] = QuadNodesInterval(0,1,0,hxi,1,1,16); % smooth Alpert-corr rule
+    Nr = numel(r); N = Np*Nz*Nr;   % # radial pts, total # pts
+    xj = zeros(1,N); yj = xj; zj = xj; fj = xj; % alloc arrays
+    for i=1:Nr  % loop over radial quadr pts
+      for j=1:Nz  % loop over vertical quadr pts
+        jj = (i-1)*(Nz*Np) + (j-1)*Np + (1:Np); % indices
+        rho = sqrt(1-z(j)^2);   % circle radius in xy plane
+        xj(jj) = h*r(i)*rho*cos(pj); yj(jj) = h*r(i)*rho*sin(pj);
+        zj(jj) = h*r(i)*z(j);
+        v = r(i)^2*wr(i)*w(j);   % but why is the 3/2 needed below.. ?
+        fj(jj) = (0.5/Np) * v;    % prefactor guessed
+      end
+    end
   end
-elseif task=='p'  % Default task: random plane wave sample
-  if alpha==1
-    N = ceil(1.0*h*M);
-    tj = pi*(1:N)/N;   % half circle (ok for Re RPW ensemble)
-    xj = h*cos(tj); yj = h*sin(tj);
-    fj = (1/sqrt(N))*(randn(N,1)+1i*randn(N,1));  % each plane wave variance = 2
-  else
-    Nt = ceil(1.0*h*M);  % N per ring (half circle)
-    hxi = 2*pi/(2.0*M*h);   % grid spacing in \xi from 0 to 1 in radius
-    [r w] = QuadNodesInterval(0,1,0,hxi,1,1,16); % smooth alpert-corr rule
-    Nr = numel(r); N = Nt*Nr;   % # radial pts, total # pts
-    tj = pi*(1:Nt)/Nt;          % equispaced angles on half-circle
-    xj = zeros(1,N); yj = xj; fj = xj;
-    for i=1:Nr   % loop radially over quadr nodes, with weight 2r
-      v = 2*r(i)*w(i);   % quadr wei is applied to variance
-      jj = (i-1)*Nt + (1:Nt); % indices
-      xj(jj) = h*r(i)*cos(tj); yj(jj) = h*r(i)*sin(tj);
-      fj(jj) = sqrt(v/Nt)*(randn(Nt,1)+1i*randn(Nt,1)); % for unit variance
+    
+elseif task=='p' % ...... random plane waves .....................
+  if alpha==1            % random data on S^2
+    Np = ceil(1.0*h*M);   % # uniform sample pts in 0<=phi<pi
+    pj = pi*(1:Np)/Np;    % half circle
+    Nz = ceil(1.0*h*M);   % # sample pts in -1<z<1
+    [z w] = lgwt(Nz,-1,1);  % vertical quadr scheme
+    N = Np*Nz; xj = zeros(1,N); yj = xj; zj = xj; fj = xj; % alloc arrays
+    for j=1:Nz
+      jj = (j-1)*Np + (1:Np); % indices
+      rho = sqrt(1-z(j)^2);   % circle radius in xy plane
+      xj(jj) = h*rho*cos(pj); yj(jj) = h*rho*sin(pj); zj(jj) = h*z(j);
+      v = 0.5*w(j);               % quadr wei applied to variance
+      fj(jj) = sqrt(v/Np)*(randn(Np,1)+1i*randn(Np,1)); % unit variance
+    end
+  else           % alpha=0: integrate over radii, ie solid sphere radius h
+    Np = ceil(1.0*h*M);   % # uniform sample pts in 0<=phi<pi
+    pj = pi*(1:Np)/Np;    % half circle
+    Nz = ceil(1.0*h*M);   % # sample pts in -1<z<1
+    [z w] = lgwt(Nz,-1,1);  % vertical quadr scheme
+    hxi = 2*pi/(2.0*M*h);   % grid spacing in \xi if from 0 to 1 in radius
+    [r wr] = QuadNodesInterval(0,1,0,hxi,1,1,16); % smooth Alpert-corr rule
+    Nr = numel(r); N = Np*Nz*Nr;   % # radial pts, total # pts
+    xj = zeros(1,N); yj = xj; zj = xj; fj = xj; % alloc arrays
+    for i=1:Nr  % loop over radial quadr pts
+      for j=1:Nz  % loop over vertical quadr pts
+        jj = (i-1)*(Nz*Np) + (j-1)*Np + (1:Np); % indices
+        rho = sqrt(1-z(j)^2);   % circle radius in xy plane
+        xj(jj) = h*r(i)*rho*cos(pj); yj(jj) = h*r(i)*rho*sin(pj);
+        zj(jj) = h*r(i)*z(j);
+        v = 3/2*r(i)^2*wr(i)*w(j);  % NB r^2; quadr wei applied to variance
+        fj(jj) = sqrt(v/Np)*(randn(Np,1)+1i*randn(Np,1)); % unit variance
+      end
     end
   end
 end
@@ -135,35 +150,100 @@ iflag = 1; % choose +i in exp sum
 tic;
 if ~isfield(nopts,'cmcl')
   %addpath('/home/alex/numerics/finufft/matlab');
-  u = finufft2d1(xj,yj,fj,iflag,eps,M,M,nopts);
+  u = finufft3d1(xj,yj,zj,fj,iflag,eps,M,M,M,nopts);
 else
   %addpath('/home/alex/numerics/nufftall-1.33/');
-  u = nufft2d1(N,xj,yj,fj,iflag,eps,M,M); u = u*N; % old interface
+  u = nufft3d1(N,xj,yj,zj,fj,iflag,eps,M,M,M); u = u*N; % old interface
 end
 fprintf('nufft time = %g s\n',toc)
-u = real(u)'; % makes real and unit-variance
+u = real(u);  % makes real and unit-variance
 if task=='p'
   fprintf('mean sq u = %.6g (should be close to 1)\n', mean(u(:).^2));
 end
 
 x = h*(-M/2:M/2-1); % coord space grid (must match NUFFT's definition of k grid)
+u =reshape(u, [M M M]); % output index ordering is (x,y,z)
 
 if task=='b' % make error plot
-  if M>4096, warning('task=b may be slow; consider shrinking M'); end
-  [xx yy] = meshgrid(x); rr = sqrt(xx.^2+yy.^2);
+  [xx yy zz] = meshgrid(x); rr = sqrt(xx.^2+yy.^2+zz.^2);
   if alpha==1
-    uex = besselj(n,rr).*cos(n*atan2(yy,xx)); % eval Re F-B func
+    uex = sin(rr)./rr;  % spherical Bessel j_0(r), roundoff around r->0
   else
-    uex = besselj(1,rr)./rr;                 % rad-symm aperture func
+    uex = (sin(rr)./rr - cos(rr))./(rr.^2);  % j_1(r)/r, bad roundoff r->0
   end
-  err = u-uex; fprintf('task=b, J_n test: max err = %.3g\n',max(err(:)))
-  figure; imagesc(x,x,log10(abs(err)));
-  title('log_{10} error vs J_n(r) e^{in\theta}');
-  caxis([-16 0]); colorbar; axis xy equal tight;
+  err = u-uex; fprintf('task=b, j_0 test: max err = %.3g\n',max(err(:)))
+  figure; for z=1:M, imagesc(x,x,squeeze(log10(abs(err(:,:,z)))));
+    caxis([-16 0]); axis equal; title(sprintf('z=%.3g',x(z)));
+    drawnow; end
+%  figure; imagesc(x,x,log10(abs(squeeze(err(1,:,:))))); title('slice error vs j_0(r)'); caxis([-16 0]); colorbar; axis xy equal tight;
+%  figure; imagesc(x,x,squeeze(u(1,:,:)));
 end
+
 
 %================== helper functions: quadrature ===========================
 
+function [x w] = lgwt(N,a,b)
+% [x w] = lgwt(N,a,b)
+%
+% This script is for computing definite integrals using Legendre-Gauss 
+% Quadrature. Computes the N Legendre-Gauss nodes x and weights w on an
+% interval [a,b]
+%
+% Suppose you have a continuous function f(x) which is defined on [a,b]
+% which you can evaluate at any x in [a,b]. Simply evaluate it at all of
+% the values contained in the x vector to obtain a vector f. Then compute
+% the definite integral using sum(f.*w);
+%
+% Written by Greg von Winckel - 02/25/2004
+N=N-1;
+N1=N+1; N2=N+2;
+
+xu=linspace(-1,1,N1)';
+
+% Initial guess
+y=cos((2*(0:N)'+1)*pi/(2*N+2))+(0.27/N1)*sin(pi*xu*N/N2);
+
+% Legendre-Gauss Vandermonde Matrix
+L=zeros(N1,N2);
+
+% Derivative of LGVM
+Lp=zeros(N1,N2);
+
+% Compute the zeros of the N+1 Legendre Polynomial
+% using the recursion relation and the Newton-Raphson method
+
+y0=2;
+
+% Iterate until new points are uniformly within epsilon of old points
+while max(abs(y-y0))>eps
+    
+    L(:,1)=1;
+    Lp(:,1)=0;
+    
+    L(:,2)=y;
+    Lp(:,2)=1;
+    
+    for k=2:N1
+        L(:,k+1)=( (2*k-1)*y.*L(:,k)-(k-1)*L(:,k-1) )/k;
+    end
+ 
+    Lp=(N2)*( L(:,N1)-y.*L(:,N2) )./(1-y.^2);   
+    
+    y0=y;
+    y=y0-L(:,N2)./Lp;
+    
+end
+
+% Linear map from[-1,1] to [a,b]
+x=(a*(1-y)+b*(1+y))/2;      
+
+% Compute the weights
+w=(b-a)./((1-y.^2).*Lp.^2)*(N2/N1)^2;
+
+x = x(end:(-1):1);
+
+
+%----------------------------------------------------------------------
 function [Ax, Aw] = QuadNodesInterval(a, b, N, h, corra, corrb, order)
 % Return the quadrature nodes and weights on an interval [a,b]
 % with N points or step size approximately h (if N is set to 0)
@@ -175,7 +255,7 @@ function [Ax, Aw] = QuadNodesInterval(a, b, N, h, corra, corrb, order)
 % order: is the order of the endpoint corrections used
 % The nodes (Ax) and the weights (Aw) are returned
 %
-% Andras Pataki 2008, edited slightly by Barnett.
+% Andras Pataki 2008
     if (corra == 0)
 	NodesToSkipL = 0;
     elseif (corra == 1)
@@ -218,7 +298,8 @@ function [Ax, Aw] = QuadNodesInterval(a, b, N, h, corra, corrb, order)
 	Ax = [ Ax(1:length(Ax)-NodesToSkipR); flipud(b-ExtraNodesR*h) ];
 	Aw = [ Aw(1:length(Aw)-NodesToSkipR); flipud(ExtraWeightsR*h) ];
     end
-
+    
+%----------------------------------------------------------------------
 function [ExtraNodes, ExtraWeights, NodesToSkip] = QuadSmoothExtraPtNodes(order)
 % Andras Pataki 2008
 
