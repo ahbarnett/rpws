@@ -147,7 +147,7 @@ elseif task=='p' % ...... random plane waves .....................
   end
 end
 iflag = 1; % choose +i in exp sum
-tic;
+t=tic;
 if ~isfield(nopts,'cmcl')
   %addpath('/home/alex/numerics/finufft/matlab');
   u = finufft3d1(xj,yj,zj,fj,iflag,eps,M,M,M,nopts);
@@ -155,7 +155,7 @@ else
   %addpath('/home/alex/numerics/nufftall-1.33/');
   u = nufft3d1(N,xj,yj,zj,fj,iflag,eps,M,M,M); u = u*N; % old interface
 end
-fprintf('nufft time = %g s\n',toc)
+fprintf('nufft time = %g s\n',toc(t))
 u = real(u);  % makes real and unit-variance
 if task=='p'
   fprintf('mean sq u = %.6g (should be close to 1)\n', mean(u(:).^2));
