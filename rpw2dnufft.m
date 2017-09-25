@@ -132,7 +132,7 @@ elseif task=='p'  % Default task: random plane wave sample
   end
 end
 iflag = 1; % choose +i in exp sum
-tic(t);
+t=tic;
 if ~isfield(nopts,'cmcl')
   %addpath('/home/alex/numerics/finufft/matlab');
   u = finufft2d1(xj,yj,fj,iflag,eps,M,M,nopts);
